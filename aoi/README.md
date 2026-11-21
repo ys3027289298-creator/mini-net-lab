@@ -1,0 +1,3 @@
+# aoi
+
+`make test` 跑自检。
