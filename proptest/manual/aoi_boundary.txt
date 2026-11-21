@@ -1,0 +1,7 @@
+# expect: pass
+# entities exactly on the radius boundary are inside the AOI
+aoi_init 10 15
+aoi_add 1 0 0
+aoi_add 2 15 0
+aoi_add 3 0 -15
+aoi_query 1 0 0

@@ -1,0 +1,26 @@
+# mini-net-lab property-test failure (minimal, shrunk)
+# invariant: clock_accept
+# seed: 9
+# focus: clock
+# reproduce: python3 proptest/pbt.py replay proptest/failures/clock_accept-seed9.txt
+# params: {"ack_error_prob": 0.5, "ack_error_range": [0.002, 2.0], "aoi_boundary_prob": 0.3, "aoi_cell": 10.0, "aoi_radius": 15.0, "aoi_range": [-100.0, 100.0], "clock_oneway_delay": [0.01, 0.4], "delay_range": [0.0, 0.5], "focus_weights": {"aoi": 20, "clock": 25, "mixed": 20, "recon": 35}, "loss_prob": 0.25, "ops_per_scenario": 80, "scale_choices": [4, 16, 64, 256], "true_offset": [-5.0, 5.0], "x_range": [-50.0, 50.0], "y_range": [-50.0, 50.0]}
+param true_offset -1.266881
+param dmin 0.010000
+param dmax 0.400000
+clock 38.000000 38.179501 36.759901
+clock 0 43.561414 0
+clock 0 46.272330 0
+clock 0 47.319802 0
+clock 0 48.300147 0
+clock 0 49.365996 0
+clock 0 50.334384 0
+clock 0 51.528903 0
+clock 0 52.393506 0
+clock 0 53.473423 0
+clock 0 54.486061 0
+clock 0 55.321811 0
+clock 0 56.499412 0
+clock 0 57.347040 0
+clock 0 58.449852 0
+clock 0 59.420047 0
+clock 0 60.456517 0

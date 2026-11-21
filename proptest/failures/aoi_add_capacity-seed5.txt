@@ -1,0 +1,12 @@
+# mini-net-lab property-test failure (minimal, shrunk)
+# invariant: aoi_add_capacity
+# seed: 5
+# focus: aoi
+# reproduce: python3 proptest/pbt.py replay proptest/failures/aoi_add_capacity-seed5.txt
+# params: {"ack_error_prob": 0.5, "ack_error_range": [0.002, 2.0], "aoi_boundary_prob": 0.3, "aoi_cell": 10.0, "aoi_radius": 15.0, "aoi_range": [-100.0, 100.0], "clock_oneway_delay": [0.01, 0.4], "delay_range": [0.0, 0.5], "focus_weights": {"aoi": 20, "clock": 25, "mixed": 20, "recon": 35}, "loss_prob": 0.25, "ops_per_scenario": 80, "scale_choices": [4, 16, 64, 256], "true_offset": [-5.0, 5.0], "x_range": [-50.0, 50.0], "y_range": [-50.0, 50.0]}
+param true_offset 2.000000
+param dmin 0.010000
+param dmax 0.400000
+aoi_addn 0 16
+aoi_remove 0
+aoi_add 0 0 0

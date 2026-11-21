@@ -1,0 +1,15 @@
+# expect: pass
+# port of reconcile/src/reconcile.c main()
+push 1 1.0
+push 2 2.0
+push 2 5.0
+snap 2 2.0 0.0 64 0.01 0
+deliver
+push 2 3.0
+push 3 3.0
+snap 3 3.5 0.0 64 0.01 0
+deliver
+snap 99 0.0 0.0 64 0.01 0
+deliver
+reset
+pushn 1 70

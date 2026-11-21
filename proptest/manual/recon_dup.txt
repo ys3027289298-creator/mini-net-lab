@@ -1,0 +1,6 @@
+# expect: pass
+# duplicate tick that is NOT the most recent entry must be rejected
+push 1 1.0
+push 2 2.0
+push 3 3.0
+push 1 9.0

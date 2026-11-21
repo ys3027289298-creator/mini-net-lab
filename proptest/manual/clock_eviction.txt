@@ -1,0 +1,9 @@
+# expect: fail clock_accept
+# documents a real defect: best_rtt is never recomputed when the best sample
+# is evicted from the ring, so the 1.5x filter can empty the sample set and
+# sync_add starts rejecting valid samples (the offset estimate freezes).
+param true_offset 2.0
+param dmin 0.01
+param dmax 0.5
+clockn 1 0.01 0.0 2.0
+clockn 20 0.10 0.0 2.0

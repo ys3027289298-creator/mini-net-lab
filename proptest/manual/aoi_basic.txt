@@ -1,0 +1,13 @@
+# expect: pass
+# port of aoi/src/aoi.c main()
+aoi_init 10 15
+aoi_add 1 0 0
+aoi_add 2 5 0
+aoi_add 3 100 100
+aoi_add 2 1 1
+aoi_query 1 0 0
+aoi_move 2 100 100
+aoi_query 1 0 0
+aoi_remove 3
+aoi_query 1 200 200
+aoi_move 42 0 0

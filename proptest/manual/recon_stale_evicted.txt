@@ -1,0 +1,11 @@
+# expect: pass
+# stale tick that is no longer in the ring must still be rejected
+# (the duplicate scan alone cannot catch it: the entry was evicted)
+pushn 1 3
+snap 3 3.0 0.0 64 0.01 0
+deliver
+snap 50 0.0 0.0 64 0.01 0
+deliver
+pushn 51 70
+push 3 9.0
+push 2 8.0

@@ -1,0 +1,11 @@
+# expect: pass
+# port of clock/src/clock.c main(); dmin==dmax makes the offset bound exact
+param true_offset 2.0
+param dmin 0.025
+param dmax 0.025
+clockn 8 0.05 0.0 2.0
+clock 5.0 4.0 0.0
+reset
+param dmin 0.01
+param dmax 0.5
+clockn 40 0.05 0.01 2.0

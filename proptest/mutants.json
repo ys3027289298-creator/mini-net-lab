@@ -1,0 +1,50 @@
+[
+  {
+    "name": "recon-no-stale-check",
+    "file": "reconcile/src/reconcile.c",
+    "old": "    if (tick <= r->acked) return -1;                 /* stale tick rejected */\n",
+    "new": ""
+  },
+  {
+    "name": "recon-rollback-threshold",
+    "file": "reconcile/src/reconcile.c",
+    "old": "if (found && fabsf(pred - x) > 1e-3f) r->rollbacks++;",
+    "new": "if (found && fabsf(pred - x) > 1.0f) r->rollbacks++;"
+  },
+  {
+    "name": "recon-dup-last-only",
+    "file": "reconcile/src/reconcile.c",
+    "old": "    for (int i = 0; i < r->count; i++) {             /* duplicate tick anywhere */",
+    "new": "    for (int i = 0; i < 1 && i < r->count; i++) {    /* duplicate tick anywhere */"
+  },
+  {
+    "name": "recon-acked-frozen",
+    "file": "reconcile/src/reconcile.c",
+    "old": "    if (tick > r->acked) r->acked = tick;",
+    "new": "    /* acked not advanced (mutant) */"
+  },
+  {
+    "name": "clock-offset-not-midpoint",
+    "file": "clock/src/clock.c",
+    "old": "    double offset = remote_time - (t_send + t_recv) * 0.5;",
+    "new": "    double offset = remote_time - t_recv;"
+  },
+  {
+    "name": "clock-filter-too-tight",
+    "file": "clock/src/clock.c",
+    "old": "        if (sy->s[i].rtt <= sy->best_rtt * 1.5 + 1e-9) {",
+    "new": "        if (sy->s[i].rtt <= sy->best_rtt * 0.5 + 1e-9) {"
+  },
+  {
+    "name": "snapshot-zigzag-unsigned",
+    "file": "snapshot/src/snapshot.c",
+    "old": "    unsigned zx = (unsigned)((qx << 1) ^ (qx >> 31));   /* zigzag */",
+    "new": "    unsigned zx = (unsigned)(qx << 1);                   /* zigzag */"
+  },
+  {
+    "name": "aoi-radius-exclusive",
+    "file": "aoi/src/aoi.c",
+    "old": "        if (dx * dx + dy * dy <= r2) {",
+    "new": "        if (dx * dx + dy * dy < r2) {"
+  }
+]

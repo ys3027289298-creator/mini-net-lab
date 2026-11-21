@@ -1,0 +1,8 @@
+# expect: fail aoi_add_capacity
+# documents a real defect: removed entities keep their slots, so world_add
+# fails with "full" even though fewer than MAX_ENT entities are alive.
+aoi_init 10 15
+aoi_addn 1 16
+aoi_remove 5
+aoi_remove 6
+aoi_add 100 1 1
