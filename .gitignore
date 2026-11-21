@@ -1,0 +1,9 @@
+# build outputs (each module's Makefile builds a binary of the module name)
+/adapt/adapt
+/adapt/sim
+/aoi/aoi
+/clock/clock
+/reconcile/reconcile
+/snapshot/snapshot
+
+*.o
