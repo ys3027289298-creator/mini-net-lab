@@ -1,0 +1,12 @@
+# build outputs
+aoi/aoi
+aoi/aoi_timing
+clock/clock
+clock/clock_timing
+reconcile/reconcile
+reconcile/reconcile_timing
+snapshot/snapshot
+snapshot/snapshot_timing
+common/ftrace_test
+common/ftrace_noop_test
+*.o

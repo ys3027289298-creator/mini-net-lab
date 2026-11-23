@@ -1,5 +1,6 @@
 
 /* reconcile: prediction buffer with rollback on authoritative state. */
+#include "../../common/ftrace.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -51,7 +52,57 @@ static void check(const char* name, int ok) {
     if (!ok) failures++;
 }
 
+#if FT_ENABLE
+#include "../../common/ft_accept.h"
+
+/* Unified-timing acceptance: deterministic exact scenarios plus a
+ * real CLOCK_MONOTONIC frame loop exercising this module's workload. */
+static int ft_run_reconcile(void) {
+    ft_deterministic_accept("reconcile", "rec");
+
+    enum { FT_FRAMES = 64, FT_ITERS = 500 };
+    ft_t t;
+    ft_init(&t);
+    volatile int sink = 0;
+
+    for (int f = 0; f < FT_FRAMES; f++) {
+        Recon r;
+        recon_init(&r);
+        ft_frame_begin(&t);
+        int outer = ft_span_start(&t, "rec.frame_outer");   /* wraps push + ack */
+            int psh = ft_span_start(&t, "rec.push");
+            for (int k = 1; k <= FT_ITERS; k++) sink += recon_push(&r, (unsigned)k, (float)k) == 0;
+            ft_span_end(&t, psh);
+            int ack = ft_span_start(&t, "rec.ack");
+            for (int k = 1; k <= FT_ITERS; k++) sink += recon_ack(&r, (unsigned)k, (float)k + 0.25f);
+            ft_span_end(&t, ack);
+        ft_span_end(&t, outer);
+        int scan = ft_span_start(&t, "rec.scan");          /* disjoint, after the outer */
+        int live = 0;
+        for (int k = 0; k < r.count; k++) if (r.p[k].tick > 0) live++;
+        sink += live + r.rollbacks;
+        ft_span_end(&t, scan);
+        ft_frame_end(&t);
+    }
+
+    const FtReport* r = ft_report(&t);
+    check("ft_rec_real_frames", r->frames == FT_FRAMES);
+    check("ft_rec_real_overlap_positive", r->overlap_sum > 0.0);
+    check("ft_rec_real_gap_nonneg", r->gap_sum >= 0.0);
+    check("ft_rec_real_identity",
+          fabs(r->diff_sum - (r->overlap_sum - r->gap_sum)) <= r->eps_sum);
+    check("ft_rec_real_bound", r->abs_diff_sum <= r->bound_sum + r->eps_sum);
+    check("ft_rec_real_verify", ft_verify(&t) == 0);
+    ft_print_report(&t, "reconcile real-clock workload", stdout);
+    (void)sink;
+    return ft_verify(&t) == 0 ? 0 : 1;
+}
+#endif
+
 int main(void) {
+#if FT_ENABLE
+    if (ft_run_reconcile() != 0) return 1;
+#endif
     Recon r;
     recon_init(&r);
     check("push1", recon_push(&r, 1, 1.0f) == 0);

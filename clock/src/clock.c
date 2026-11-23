@@ -1,5 +1,6 @@
 
 /* clock: network clock offset estimation with min-RTT filtering. */
+#include "../../common/ftrace.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -49,7 +50,55 @@ static void check(const char* name, int ok) {
     if (!ok) failures++;
 }
 
+#if FT_ENABLE
+#include "../../common/ft_accept.h"
+
+/* Unified-timing acceptance: deterministic exact scenarios plus a
+ * real CLOCK_MONOTONIC frame loop exercising this module's workload. */
+static int ft_run_clock(void) {
+    ft_deterministic_accept("clock", "clk");
+
+    enum { FT_FRAMES = 64, FT_ITERS = 3000 };
+    ft_t t;
+    ft_init(&t);
+    volatile double sink = 0.0;
+
+    for (int f = 0; f < FT_FRAMES; f++) {
+        Sync sy;
+        sync_init(&sy);
+        ft_frame_begin(&t);
+        int sp = ft_span_start(&t, "clk.sample");
+        for (int k = 0; k < FT_ITERS; k++) {
+            double ts = (double)k * 0.01;
+            sync_add(&sy, ts, ts + 0.05 + (k % 5) * 0.01, ts + 0.025 + 2.0);
+        }
+        sink += sy.offset;
+        ft_span_end(&t, sp);
+        int fl = ft_span_start(&t, "clk.filter");   /* disjoint span, same frame */
+        double acc = 0.0;
+        for (int k = 0; k < sy.n; k++) acc += sy.s[k].rtt;
+        sink += acc;
+        ft_span_end(&t, fl);
+        ft_frame_end(&t);
+    }
+
+    const FtReport* r = ft_report(&t);
+    check("ft_clk_real_frames", r->frames == FT_FRAMES);
+    check("ft_clk_real_gap_positive", r->gap_sum >= 0.0);
+    check("ft_clk_real_identity",
+          fabs(r->diff_sum - (r->overlap_sum - r->gap_sum)) <= r->eps_sum);
+    check("ft_clk_real_bound", r->abs_diff_sum <= r->bound_sum + r->eps_sum);
+    check("ft_clk_real_verify", ft_verify(&t) == 0);
+    ft_print_report(&t, "clock real-clock workload", stdout);
+    (void)sink;
+    return ft_verify(&t) == 0 ? 0 : 1;
+}
+#endif
+
 int main(void) {
+#if FT_ENABLE
+    if (ft_run_clock() != 0) return 1;
+#endif
     Sync sy;
     sync_init(&sy);
     double true_off = 2.0;

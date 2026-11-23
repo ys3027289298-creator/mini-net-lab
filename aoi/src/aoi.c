@@ -1,5 +1,6 @@
 
 /* aoi: grid-based area of interest with enter/leave diff and radius query. */
+#include "../../common/ftrace.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -90,7 +91,61 @@ static void check(const char* name, int ok) {
     if (!ok) failures++;
 }
 
+#if FT_ENABLE
+#include "../../common/ft_accept.h"
+
+/* Unified-timing acceptance: deterministic exact scenarios plus a
+ * real CLOCK_MONOTONIC frame loop exercising this module's workload. */
+static int ft_run_aoi(void) {
+    ft_deterministic_accept("aoi", "aoi");
+
+    enum { FT_FRAMES = 64, FT_ITERS = 400 };
+    ft_t t;
+    ft_init(&t);
+    volatile int sink = 0;
+
+    for (int f = 0; f < FT_FRAMES; f++) {
+        World w;
+        world_init(&w, 10.0f, 15.0f);
+        for (int id = 1; id <= MAX_ENT; id++) world_add(&w, id, (float)id, 0.0f);
+
+        ft_frame_begin(&t);
+        int outer = ft_span_start(&t, "aoi.scan_outer");   /* wraps the query */
+            int mv = ft_span_start(&t, "aoi.move");
+            for (int k = 0; k < FT_ITERS; k++) world_move(&w, 2, (float)(k % 7), 0.0f);
+            ft_span_end(&t, mv);
+            int q = ft_span_start(&t, "aoi.query");
+            int out[16];
+            for (int k = 0; k < FT_ITERS; k++) sink += world_query(&w, 1, 0, 0, out, 16);
+            ft_span_end(&t, q);
+        ft_span_end(&t, outer);
+        int df = ft_span_start(&t, "aoi.diff");            /* disjoint from the scan */
+        int enter = 0, leave = 0;
+        int prev[4] = { 2, 3, 4, 5 }, cur[4] = { 3, 4, 5, 6 };
+        for (int k = 0; k < FT_ITERS; k++) world_diff(prev, 4, cur, 4, &enter, &leave);
+        sink += enter + leave;
+        ft_span_end(&t, df);
+        ft_frame_end(&t);
+    }
+
+    const FtReport* r = ft_report(&t);
+    check("ft_aoi_real_frames", r->frames == FT_FRAMES);
+    check("ft_aoi_real_overlap_positive", r->overlap_sum > 0.0);
+    check("ft_aoi_real_gap_nonneg", r->gap_sum >= 0.0);
+    check("ft_aoi_real_identity",
+          fabs(r->diff_sum - (r->overlap_sum - r->gap_sum)) <= r->eps_sum);
+    check("ft_aoi_real_bound", r->abs_diff_sum <= r->bound_sum + r->eps_sum);
+    check("ft_aoi_real_verify", ft_verify(&t) == 0);
+    ft_print_report(&t, "aoi real-clock workload", stdout);
+    (void)sink;
+    return ft_verify(&t) == 0 ? 0 : 1;
+}
+#endif
+
 int main(void) {
+#if FT_ENABLE
+    if (ft_run_aoi() != 0) return 1;
+#endif
     World w;
     world_init(&w, 10.0f, 15.0f);
     check("add_self", world_add(&w, 1, 0, 0) == 0);
