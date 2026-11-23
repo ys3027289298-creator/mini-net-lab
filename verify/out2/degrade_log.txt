@@ -1,0 +1,5 @@
+tier=5 tick=146 window_loss_pct=18 degrade=on
+tier=5 tick=368 window_loss_pct=0 degrade=off
+tier=10 tick=61 window_loss_pct=18 degrade=on
+tier=20 tick=22 window_loss_pct=18 degrade=on
+tier=30 tick=15 window_loss_pct=37 degrade=on

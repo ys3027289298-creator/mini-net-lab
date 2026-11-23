@@ -1,0 +1,16 @@
+loss_pct,mode,segment,mean_phase_diff_ticks,max_phase_diff_ticks,samples,rollbacks,packets_sent
+0,off,all,0.000,0,600,19,600
+0,on,pre,0.000,0,600,19,600
+0,on,post,-1.000,0,0,0,600
+5,off,all,0.000,0,600,19,600
+5,on,pre,0.000,0,146,4,434
+5,on,post,1.346,40,454,59,434
+10,off,all,0.100,60,600,19,600
+10,on,pre,0.000,0,61,1,196
+10,on,post,2.952,38,539,117,196
+20,off,all,0.100,10,600,19,600
+20,on,pre,0.000,0,22,0,167
+20,on,post,3.483,56,578,115,167
+30,off,all,0.133,60,600,19,600
+30,on,pre,0.000,0,15,0,162
+30,on,post,5.361,56,585,99,162

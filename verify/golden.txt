@@ -1,0 +1,5 @@
+tier=0 fnv1a=082bcc84b2be8621
+tier=5 fnv1a=082bcc84b2be8621
+tier=10 fnv1a=22f6db926afd1704
+tier=20 fnv1a=ad31e35bbac21c41
+tier=30 fnv1a=608ceb1b43f7a1aa
