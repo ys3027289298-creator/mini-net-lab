@@ -1,0 +1,6 @@
+# module self-test binaries
+snapshot/snapshot
+clock/clock
+aoi/aoi
+reconcile/reconcile
+degcrop/degcrop
