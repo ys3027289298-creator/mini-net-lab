@@ -1,10 +1,11 @@
 CC ?= gcc
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra
+CPPFLAGS += -I src -DMINILAB_SELFTEST=clock_selftest
 
 all: clock
 
-clock: src/clock.c
-	$(CC) $(CFLAGS) $< -o $@ -lm
+clock: src/clock.c src/clock.h
+	$(CC) $(CFLAGS) $(CPPFLAGS) src/clock.c -o $@ -lm
 
 test: clock
 	./clock
