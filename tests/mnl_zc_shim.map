@@ -1,0 +1,19 @@
+/* Version script: declares the glibc version nodes that the .symver aliases
+ * in mnl_zc_shim.c bind to, and keeps the mnlzc_* control channel exported
+ * so LD_PRELOAD clients can resolve it (everything else stays local). */
+GLIBC_2.2.5 {
+    global:
+        zc_memcpy_225;
+        zc_memmove;
+        zc_mempcpy;
+        mnlzc_register;
+        mnlzc_set_enabled;
+        mnlzc_copies;
+        mnlzc_reset;
+    local: *;
+};
+
+GLIBC_2.14 {
+    global:
+        zc_memcpy_214;
+} GLIBC_2.2.5;

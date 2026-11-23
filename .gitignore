@@ -1,0 +1,11 @@
+# 构建产物
+/snapshot/snapshot
+/clock/clock
+/aoi/aoi
+/reconcile/reconcile
+/tests/mnl_tests
+/tests/mnl_zc_driver
+/tests/mnl_zc_negative
+/tests/libmnl_zc_shim.so
+*.o
+*.so

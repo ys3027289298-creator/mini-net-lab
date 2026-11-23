@@ -1,0 +1,13 @@
+add_self=1
+add_near=1
+add_far=1
+dup_rejected=1
+query_near=1
+query_after_move=1
+diff_counts=1
+remove_ok=1
+removed_absent=1
+bad_cell=1
+move_missing=1
+cell_clamp=1
+all_ok=1

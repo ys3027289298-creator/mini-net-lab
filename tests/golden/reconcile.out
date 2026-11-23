@@ -1,0 +1,12 @@
+push1=1
+push2=1
+dup_rejected=1
+ack_match=1
+no_rollback=1
+stale_rejected=1
+ack_mismatch=1
+rollback_counted=1
+err_recorded=1
+ack_missing=1
+buffer_capped=1
+all_ok=1

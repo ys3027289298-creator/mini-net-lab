@@ -1,0 +1,9 @@
+encode_ok=1
+size_small=1
+decode_ok=1
+tick_roundtrip=1
+pos_quantized=1
+bad_scale=1
+bad_packet=1
+big_roundtrip=1
+all_ok=1
