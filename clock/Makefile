@@ -3,8 +3,8 @@ CFLAGS ?= -O2 -std=c11 -Wall -Wextra
 
 all: clock
 
-clock: src/clock.c
-	$(CC) $(CFLAGS) $< -o $@ -lm
+clock: src/clock.c src/clock.h
+	$(CC) $(CFLAGS) -DMINILAB_SELFTEST $< -o $@ -lm
 
 test: clock
 	./clock
