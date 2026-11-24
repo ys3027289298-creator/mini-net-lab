@@ -1,0 +1,21 @@
+# hold sweep at loss=10%, seed=7102, cap=hold+1
+hold=0 cap=1 late=59 evict=0 dropped=59 delivered=124 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=1 cap=2 late=18 evict=0 dropped=18 delivered=165 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=2 cap=3 late=3 evict=0 dropped=3 delivered=180 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=3 cap=4 late=0 evict=0 dropped=0 delivered=183 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=4 cap=5 late=0 evict=0 dropped=0 delivered=183 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=5 cap=6 late=0 evict=0 dropped=0 delivered=183 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=6 cap=7 late=0 evict=0 dropped=0 delivered=183 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+hold=7 cap=8 late=0 evict=0 dropped=0 delivered=183 max_span=3 naive_rewind=3 buffered_rewind=0 final_x=99.50
+# capacity stress at hold=4 (D from T=200ms), loss=0%, seed=7101
+hold=4 cap=1 late=0 evict=191 dropped=191 delivered=9 naive_rewind=4 buffered_rewind=0 final_x=99.50
+hold=4 cap=2 late=0 evict=182 dropped=182 delivered=18 naive_rewind=4 buffered_rewind=0 final_x=99.50
+hold=4 cap=3 late=0 evict=151 dropped=151 delivered=49 naive_rewind=4 buffered_rewind=0 final_x=99.50
+hold=4 cap=5 late=0 evict=0 dropped=0 delivered=200 naive_rewind=4 buffered_rewind=0 final_x=99.50
+# no-loss latency/reorder trade-off, seed=7101
+hold=0 cap=1 dropped=87 delivered=113 max_span=4 naive_rewind=4 buffered_rewind=0
+hold=1 cap=2 dropped=34 delivered=166 max_span=4 naive_rewind=4 buffered_rewind=0
+hold=2 cap=3 dropped=20 delivered=180 max_span=4 naive_rewind=4 buffered_rewind=0
+hold=3 cap=4 dropped=5 delivered=195 max_span=4 naive_rewind=4 buffered_rewind=0
+hold=4 cap=5 dropped=0 delivered=200 max_span=4 naive_rewind=4 buffered_rewind=0
+hold=5 cap=6 dropped=0 delivered=200 max_span=4 naive_rewind=4 buffered_rewind=0
