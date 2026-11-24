@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>按距离/视野分配更新频率 — 带宽与位置误差</title>
+<style>
+  :root {
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,.10);
+    --series-1: #2a78d6;   /* 带宽消耗 */
+    --series-2: #eb6834;   /* 位置误差 */
+    --series-3: #1baf7a;   /* 实际误差 */
+    --critical: #d03b3b;
+    --good: #006300;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", "WenQuanYi Zen Hei", sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,.10);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --critical: #d03b3b;
+      --good: #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --critical: #d03b3b;
+    --good: #0ca30c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 32px 24px 64px; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0 0 4px; font-weight: 650; }
+  h2 { font-size: 16px; font-weight: 650; margin: 40px 0 12px; }
+  p { margin: 8px 0; color: var(--text-secondary); max-width: 78ch; }
+  .sub { color: var(--text-secondary); margin: 0 0 28px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px 12px; }
+  .card-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .card-title { font-weight: 600; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-secondary); font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 0; border-top: 2px solid; display: inline-block; border-radius: 1px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tick { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .lbl { fill: var(--text-secondary); font-size: 11.5px; }
+  .lbl-strong { fill: var(--text-primary); font-size: 12px; font-weight: 600; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 8px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .kpi .k { font-size: 12px; color: var(--text-secondary); }
+  .kpi .v { font-size: 22px; font-weight: 650; line-height: 1.25; }
+  .kpi .a { font-size: 11.5px; color: var(--text-muted); }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 13px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--axis); }
+  th:first-child, td:first-child { text-align: left; }
+  th.grp { text-align: center; border-bottom: 1px solid var(--grid); }
+  tbody tr:hover td { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+  tr.sel td { background: color-mix(in srgb, var(--series-2) 7%, transparent); font-weight: 600; }
+  tr.cand td { background: color-mix(in srgb, var(--text-muted) 5%, transparent); }
+  .bad { color: var(--critical); }
+  .ok { color: var(--good); }
+  .note { font-size: 12.5px; color: var(--text-muted); margin: 6px 0 0; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .callout { border-left: 3px solid var(--series-2); padding: 8px 14px; background: color-mix(in srgb, var(--series-2) 7%, var(--surface-1)); border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .callout p { margin: 4px 0; color: var(--text-primary); }
+  code { font-family: var(--mono); font-size: 12.5px; background: color-mix(in srgb, var(--text-primary) 6%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 10; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); color: var(--text-primary); opacity: 0; transition: opacity .08s;
+    min-width: 160px;
+  }
+  .tooltip .tt-x { color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 14px; }
+  .tooltip .row b { font-weight: 650; }
+  .tooltip .key { display: inline-block; width: 10px; border-top: 2px solid; vertical-align: 3px; margin-right: 6px; }
+  details { margin: 8px 0 0; }
+  summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+  @media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  @media print { .kpis { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>近处优先的更新频率分配：带宽曲线与位置误差曲线</h1>
+  <p class="sub">mininet-lab · budget 模块 · 10 KB/s 单客户端预算、每实体每次更新 40 B、AOI 半径 25 m；数据由 <code>./budget exp</code> 与 <code>./budget curves</code> 生成</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">旧策略（按人数均分）</div><div class="v">3.7 Hz</div><div class="a">贴身近敌也算 3.7 Hz · 误差 12.8 cm</div></div>
+    <div class="kpi"><div class="k">新策略·选中点 β=0.70</div><div class="v">7.7 Hz</div><div class="a">贴身较均分 3.7 → 7.7 Hz · 误差 12.8 → 4.4 cm</div></div>
+    <div class="kpi"><div class="k">视野内远（18 m）</div><div class="v">4.4 Hz</div><div class="a">较均分 +18% · 误差 12.4 → 9.8 cm</div></div>
+    <div class="kpi"><div class="k">视野外（32 m）</div><div class="v">1.5 Hz</div><div class="a">只发保活 · 误差 2.55 m</div></div>
+  </div>
+
+  <h2>两条曲线画在同一张图上：一条随频率上升，两条随频率下降</h2>
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">带宽成本 bw(f) = 40 B × f，位置误差 err(f)；纵轴为对数倍率，1× = 该函数在 10 Hz 处的取值</span>
+      <div class="legend">
+        <span><i style="border-color:var(--series-1)"></i>带宽消耗，随 f 线性上升</span>
+        <span><i style="border-color:var(--series-2)"></i>视野内误差，随 f 下降</span>
+        <span><i style="border-color:var(--series-3);border-top-style:dashed"></i>视野外误差，随 f 下降但慢</span>
+      </div>
+    </div>
+    <div id="curves"></div>
+    <p class="note">两条函数单位不同（B/s 与 m），所以各自除以“10 Hz 处的取值”后画在同一根对数轴上，高低只表示同一函数内部随 f 的变化（1× = 10 Hz 时的带宽 400 B/s、视野内误差 3.07 cm、视野外误差 0.57 m）。三根竖虚线是选中分配 β=0.70 在密集档给出的三档频率：贴身 7.7、视野内远 4.4、视野外 1.5 Hz。绝对值在端点标签与悬停提示里。</p>
+    <details><summary>表格视图（与图上曲线同源）</summary>
+      <table id="curve-table">
+        <thead><tr><th>f (Hz)</th><th>带宽 (KB/s)</th><th>视野内误差 (m)</th><th>视野外误差 (m)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </details>
+  </div>
+
+  <h2>三个候选分配点，三档同屏人数</h2>
+  <p>分配点 β 是“预算里实际用掉多少”；每个点上近/远/视野外分别拿到 <code>f = β·B/40 × w / Σ(n·w)</code>，权重 <code>w(d)=1/(1+d/15)</code>，视野外 w=0.15。下表每个格子都是该档、该分配点实际跑出来的值（同一随机种子，确定性复现）。</p>
+
+  <div class="card">
+    <table id="exp-table">
+      <thead>
+        <tr>
+          <th rowspan="2">分配点 β</th><th rowspan="2">同屏档</th><th rowspan="2">人数<br>近/远/外</th>
+          <th colspan="3" class="grp">更新频率 (Hz)</th>
+          <th colspan="3" class="grp">位置误差 (m)</th>
+        </tr>
+        <tr>
+          <th>贴身</th><th>视野内远</th><th>视野外</th>
+          <th>贴身</th><th>视野内远</th><th>视野外</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">同屏档人数：稀疏 3/4/2、中 6/10/8、密集 10/16/22（贴身/视野内远/视野外）。误差为 60 Hz 渲染下的位置 RMS，含 40 ms 单程延迟与 1/64 m 量化。</p>
+  </div>
+
+  <h2>选中点 β=0.70 在密集档：预测与实际并列</h2>
+  <div class="card">
+    <table id="pred-table">
+      <thead><tr><th>位置类别</th><th>实际误差 (m)</th><th>曲线预测：快照边界外推 (m)</th><th>曲线预测：原地冻结 (m)</th><th>实际 ÷ 外推预测</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">“快照边界外推”= 把接收端一律当作外推处理的两条函数原版；“原地冻结”= 视野外接收端不预测、只保留最后一帧的版本。选中点上的判定标准是“实际误差高于曲线预测”。</p>
+  </div>
+  <div class="callout">
+    <p><strong>漏掉的是“视野外”这一类位置上的耦合项。</strong>贴身与视野内远两类的实际误差与曲线预测相差 1%，但视野外实际 2.55 m，外推曲线只给 0.62 m，低了 4.15 倍；改用冻结曲线预测则是 2.56 m，差 0.4%。三个分配点 × 三档里，视野外实际值均是外推预测的 3.4–12.7 倍，冻结预测则在 ±2% 内；不是单点噪声。</p>
+    <p>原因：原来的 err(f) 只写了“接收端用快照速度外推”这一种接收行为，误差只由刷新间隔加延迟决定。视野外实体不参与渲染，接收端不会外推而是冻结最后一帧，误差就变成整段滞后时间里的位移本身（<code>V·age</code>），在低频段比外推项大一个量级。只按外推曲线选分配点，会把视野外的保活频率压得过低，而且在曲线上看不出代价。</p>
+  </div>
+
+  <h2>为什么选中 β=0.70</h2>
+  <p>β 是“预算里用掉多少”，三档同屏人数下都在同一个 β 下比较，避免把“多给带宽”误当成“分得好”。三档分别看：</p>
+  <ul style="color:var(--text-secondary);max-width:78ch">
+    <li><strong>稀疏</strong>（9 人）：β=0.55/0.70/0.85 贴身误差 1.33/1.16/1.11 cm，收益已被量化误差和 40 ms 延迟压住；</li>
+    <li><strong>中</strong>（24 人）：3.0/2.2/1.8 cm，β 从 0.55 到 0.70 贴身误差降 25%，再往上只降 18%；</li>
+    <li><strong>密集</strong>（48 人）：6.1/4.4/3.3 cm，β=0.70 已把贴身压在 5 cm 以内，而 β=0.85 要多用 21% 带宽。</li>
+  </ul>
+  <p>β=0.70 在三档里都处在“再降 β 贴身误差明显变差、再升 β 收益变缓”的拐点附近，所以选中它。</p>
+
+  <h2>分配效果与代价</h2>
+  <div class="card">
+    <table id="equal-table">
+      <thead><tr><th>同屏档</th><th>策略</th><th>贴身<br>Hz / 误差 m</th><th>视野内远<br>Hz / 误差 m</th><th>视野外<br>Hz / 误差 m</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">同一 β=0.70、同一总带宽下的均分基线。新策略把贴身误差从 12.8 cm 压到 4.4 cm（3×），代价是视野外从 1.13 m 升到 2.55 m；视野内远的误差反而也降了（12.4 cm → 9.8 cm），因为均分把带宽平均摊给了不渲染的视野外实体。</p>
+  </div>
+
+  <h2>复现</h2>
+  <p><code>cd budget &amp;&amp; make test</code> 跑自检；<code>./budget exp &gt; out/exp.csv</code>、<code>./budget curves &gt; out/curves.csv</code>、<code>./budget equal &gt; out/equal.csv</code>、<code>./budget cal &gt; out/cal.csv</code>。本页直接内嵌这些 CSV 的数值，无外部依赖。</p>
+</main>
+<div class="tooltip" id="tt"></div>
+<script>
+const CURVES = [{"f": 0.5, "bw_bytes_per_s": 20.0, "err_drag_m": 3.57764, "err_hold_m": 6.74448}, {"f": 1.0, "bw_bytes_per_s": 40.0, "err_drag_m": 1.16101, "err_hold_m": 3.60111}, {"f": 1.5, "bw_bytes_per_s": 60.0, "err_drag_m": 0.58429, "err_hold_m": 2.49356}, {"f": 2.0, "bw_bytes_per_s": 80.0, "err_drag_m": 0.35811, "err_hold_m": 1.9305}, {"f": 2.5, "bw_bytes_per_s": 100.0, "err_drag_m": 0.24569, "err_hold_m": 1.59032}, {"f": 3.0, "bw_bytes_per_s": 120.0, "err_drag_m": 0.18135, "err_hold_m": 1.3628}, {"f": 3.5, "bw_bytes_per_s": 140.0, "err_drag_m": 0.14088, "err_hold_m": 1.20004}, {"f": 4.0, "bw_bytes_per_s": 160.0, "err_drag_m": 0.11367, "err_hold_m": 1.07791}, {"f": 4.5, "bw_bytes_per_s": 180.0, "err_drag_m": 0.09441, "err_hold_m": 0.98293}, {"f": 5.0, "bw_bytes_per_s": 200.0, "err_drag_m": 0.08024, "err_hold_m": 0.90698}, {"f": 5.5, "bw_bytes_per_s": 220.0, "err_drag_m": 0.06948, "err_hold_m": 0.84488}, {"f": 6.0, "bw_bytes_per_s": 240.0, "err_drag_m": 0.06109, "err_hold_m": 0.79318}, {"f": 6.5, "bw_bytes_per_s": 260.0, "err_drag_m": 0.05442, "err_hold_m": 0.74948}, {"f": 7.0, "bw_bytes_per_s": 280.0, "err_drag_m": 0.04901, "err_hold_m": 0.71206}, {"f": 7.5, "bw_bytes_per_s": 300.0, "err_drag_m": 0.04456, "err_hold_m": 0.67966}, {"f": 8.0, "bw_bytes_per_s": 320.0, "err_drag_m": 0.04084, "err_hold_m": 0.65135}, {"f": 8.5, "bw_bytes_per_s": 340.0, "err_drag_m": 0.03771, "err_hold_m": 0.62641}, {"f": 9.0, "bw_bytes_per_s": 360.0, "err_drag_m": 0.03503, "err_hold_m": 0.60426}, {"f": 9.5, "bw_bytes_per_s": 380.0, "err_drag_m": 0.03273, "err_hold_m": 0.58447}, {"f": 10.0, "bw_bytes_per_s": 400.0, "err_drag_m": 0.03074, "err_hold_m": 0.56668}, {"f": 10.5, "bw_bytes_per_s": 420.0, "err_drag_m": 0.029, "err_hold_m": 0.55061}, {"f": 11.0, "bw_bytes_per_s": 440.0, "err_drag_m": 0.02746, "err_hold_m": 0.53601}, {"f": 11.5, "bw_bytes_per_s": 460.0, "err_drag_m": 0.02611, "err_hold_m": 0.52271}, {"f": 12.0, "bw_bytes_per_s": 480.0, "err_drag_m": 0.0249, "err_hold_m": 0.51052}, {"f": 12.5, "bw_bytes_per_s": 500.0, "err_drag_m": 0.02382, "err_hold_m": 0.49933}, {"f": 13.0, "bw_bytes_per_s": 520.0, "err_drag_m": 0.02285, "err_hold_m": 0.48901}, {"f": 13.5, "bw_bytes_per_s": 540.0, "err_drag_m": 0.02198, "err_hold_m": 0.47947}, {"f": 14.0, "bw_bytes_per_s": 560.0, "err_drag_m": 0.02119, "err_hold_m": 0.47061}, {"f": 14.5, "bw_bytes_per_s": 580.0, "err_drag_m": 0.02047, "err_hold_m": 0.46238}, {"f": 15.0, "bw_bytes_per_s": 600.0, "err_drag_m": 0.01981, "err_hold_m": 0.45471}, {"f": 15.5, "bw_bytes_per_s": 620.0, "err_drag_m": 0.01921, "err_hold_m": 0.44754}, {"f": 16.0, "bw_bytes_per_s": 640.0, "err_drag_m": 0.01866, "err_hold_m": 0.44083}, {"f": 16.5, "bw_bytes_per_s": 660.0, "err_drag_m": 0.01816, "err_hold_m": 0.43453}, {"f": 17.0, "bw_bytes_per_s": 680.0, "err_drag_m": 0.01769, "err_hold_m": 0.42861}, {"f": 17.5, "bw_bytes_per_s": 700.0, "err_drag_m": 0.01726, "err_hold_m": 0.42303}, {"f": 18.0, "bw_bytes_per_s": 720.0, "err_drag_m": 0.01686, "err_hold_m": 0.41777}, {"f": 18.5, "bw_bytes_per_s": 740.0, "err_drag_m": 0.01649, "err_hold_m": 0.4128}, {"f": 19.0, "bw_bytes_per_s": 760.0, "err_drag_m": 0.01614, "err_hold_m": 0.40809}, {"f": 19.5, "bw_bytes_per_s": 780.0, "err_drag_m": 0.01582, "err_hold_m": 0.40363}, {"f": 20.0, "bw_bytes_per_s": 800.0, "err_drag_m": 0.01552, "err_hold_m": 0.3994}, {"f": 20.5, "bw_bytes_per_s": 820.0, "err_drag_m": 0.01524, "err_hold_m": 0.39538}, {"f": 21.0, "bw_bytes_per_s": 840.0, "err_drag_m": 0.01497, "err_hold_m": 0.39155}, {"f": 21.5, "bw_bytes_per_s": 860.0, "err_drag_m": 0.01473, "err_hold_m": 0.38791}, {"f": 22.0, "bw_bytes_per_s": 880.0, "err_drag_m": 0.01449, "err_hold_m": 0.38443}, {"f": 22.5, "bw_bytes_per_s": 900.0, "err_drag_m": 0.01428, "err_hold_m": 0.38111}, {"f": 23.0, "bw_bytes_per_s": 920.0, "err_drag_m": 0.01407, "err_hold_m": 0.37794}, {"f": 23.5, "bw_bytes_per_s": 940.0, "err_drag_m": 0.01387, "err_hold_m": 0.37491}, {"f": 24.0, "bw_bytes_per_s": 960.0, "err_drag_m": 0.01369, "err_hold_m": 0.37201}, {"f": 24.5, "bw_bytes_per_s": 980.0, "err_drag_m": 0.01351, "err_hold_m": 0.36922}, {"f": 25.0, "bw_bytes_per_s": 1000.0, "err_drag_m": 0.01335, "err_hold_m": 0.36655}, {"f": 25.5, "bw_bytes_per_s": 1020.0, "err_drag_m": 0.01319, "err_hold_m": 0.36399}, {"f": 26.0, "bw_bytes_per_s": 1040.0, "err_drag_m": 0.01304, "err_hold_m": 0.36153}, {"f": 26.5, "bw_bytes_per_s": 1060.0, "err_drag_m": 0.0129, "err_hold_m": 0.35916}, {"f": 27.0, "bw_bytes_per_s": 1080.0, "err_drag_m": 0.01277, "err_hold_m": 0.35688}, {"f": 27.5, "bw_bytes_per_s": 1100.0, "err_drag_m": 0.01264, "err_hold_m": 0.35469}, {"f": 28.0, "bw_bytes_per_s": 1120.0, "err_drag_m": 0.01252, "err_hold_m": 0.35258}, {"f": 28.5, "bw_bytes_per_s": 1140.0, "err_drag_m": 0.0124, "err_hold_m": 0.35054}, {"f": 29.0, "bw_bytes_per_s": 1160.0, "err_drag_m": 0.01229, "err_hold_m": 0.34857}, {"f": 29.5, "bw_bytes_per_s": 1180.0, "err_drag_m": 0.01218, "err_hold_m": 0.34667}, {"f": 30.0, "bw_bytes_per_s": 1200.0, "err_drag_m": 0.01208, "err_hold_m": 0.34484}, {"f": 30.5, "bw_bytes_per_s": 1220.0, "err_drag_m": 0.01198, "err_hold_m": 0.34307}, {"f": 31.0, "bw_bytes_per_s": 1240.0, "err_drag_m": 0.01189, "err_hold_m": 0.34136}, {"f": 31.5, "bw_bytes_per_s": 1260.0, "err_drag_m": 0.0118, "err_hold_m": 0.3397}, {"f": 32.0, "bw_bytes_per_s": 1280.0, "err_drag_m": 0.01171, "err_hold_m": 0.33809}, {"f": 32.5, "bw_bytes_per_s": 1300.0, "err_drag_m": 0.01163, "err_hold_m": 0.33654}, {"f": 33.0, "bw_bytes_per_s": 1320.0, "err_drag_m": 0.01155, "err_hold_m": 0.33503}, {"f": 33.5, "bw_bytes_per_s": 1340.0, "err_drag_m": 0.01148, "err_hold_m": 0.33357}, {"f": 34.0, "bw_bytes_per_s": 1360.0, "err_drag_m": 0.0114, "err_hold_m": 0.33215}, {"f": 34.5, "bw_bytes_per_s": 1380.0, "err_drag_m": 0.01133, "err_hold_m": 0.33078}, {"f": 35.0, "bw_bytes_per_s": 1400.0, "err_drag_m": 0.01126, "err_hold_m": 0.32944}, {"f": 35.5, "bw_bytes_per_s": 1420.0, "err_drag_m": 0.0112, "err_hold_m": 0.32815}, {"f": 36.0, "bw_bytes_per_s": 1440.0, "err_drag_m": 0.01114, "err_hold_m": 0.32689}, {"f": 36.5, "bw_bytes_per_s": 1460.0, "err_drag_m": 0.01107, "err_hold_m": 0.32566}, {"f": 37.0, "bw_bytes_per_s": 1480.0, "err_drag_m": 0.01102, "err_hold_m": 0.32447}, {"f": 37.5, "bw_bytes_per_s": 1500.0, "err_drag_m": 0.01096, "err_hold_m": 0.32331}, {"f": 38.0, "bw_bytes_per_s": 1520.0, "err_drag_m": 0.0109, "err_hold_m": 0.32219}, {"f": 38.5, "bw_bytes_per_s": 1540.0, "err_drag_m": 0.01085, "err_hold_m": 0.32109}, {"f": 39.0, "bw_bytes_per_s": 1560.0, "err_drag_m": 0.0108, "err_hold_m": 0.32002}, {"f": 39.5, "bw_bytes_per_s": 1580.0, "err_drag_m": 0.01075, "err_hold_m": 0.31898}, {"f": 40.0, "bw_bytes_per_s": 1600.0, "err_drag_m": 0.0107, "err_hold_m": 0.31797}];
+const EXP = [{"beta": 0.55, "tier": "sparse", "near_n": 3.0, "mid_n": 4.0, "out_n": 2.0, "f_near": 24.776, "f_mid": 14.265, "f_out": 4.707, "err_near": 0.01334, "err_mid": 0.02162, "err_out": 0.93705, "pred_drag_near": 0.01342, "pred_drag_mid": 0.0208, "pred_drag_out": 0.08803, "pred_hold_near": 0.36774, "pred_hold_mid": 0.46617, "pred_hold_out": 0.94947}, {"beta": 0.55, "tier": "medium", "near_n": 6.0, "mid_n": 10.0, "out_n": 8.0, "f_near": 10.605, "f_mid": 6.106, "f_out": 2.015, "err_near": 0.03003, "err_mid": 0.06026, "err_out": 1.90699, "pred_drag_near": 0.02866, "pred_drag_mid": 0.05956, "pred_drag_out": 0.35361, "pred_hold_near": 0.54743, "pred_hold_mid": 0.78335, "pred_hold_out": 1.91792}, {"beta": 0.55, "tier": "dense", "near_n": 10.0, "mid_n": 16.0, "out_n": 22.0, "f_near": 6.018, "f_mid": 3.466, "f_out": 1.144, "err_near": 0.0608, "err_mid": 0.13861, "err_out": 3.17838, "pred_drag_near": 0.06082, "pred_drag_mid": 0.14316, "pred_drag_out": 0.92607, "pred_hold_near": 0.79144, "pred_hold_mid": 1.20971, "pred_hold_out": 3.18688}, {"beta": 0.7, "tier": "sparse", "near_n": 3.0, "mid_n": 4.0, "out_n": 2.0, "f_near": 31.532, "f_mid": 18.155, "f_out": 5.991, "err_near": 0.01161, "err_mid": 0.01699, "err_out": 0.78011, "pred_drag_near": 0.01179, "pred_drag_mid": 0.01674, "pred_drag_out": 0.06122, "pred_hold_near": 0.33959, "pred_hold_mid": 0.41619, "pred_hold_out": 0.794}, {"beta": 0.7, "tier": "medium", "near_n": 6.0, "mid_n": 10.0, "out_n": 8.0, "f_near": 13.496, "f_mid": 7.771, "f_out": 2.564, "err_near": 0.02235, "err_mid": 0.042, "err_out": 1.54424, "pred_drag_near": 0.02198, "pred_drag_mid": 0.04246, "pred_drag_out": 0.23544, "pred_hold_near": 0.47954, "pred_hold_mid": 0.66388, "pred_hold_out": 1.55609}, {"beta": 0.7, "tier": "dense", "near_n": 10.0, "mid_n": 16.0, "out_n": 22.0, "f_near": 7.661, "f_mid": 4.411, "f_out": 1.456, "err_near": 0.04369, "err_mid": 0.09841, "err_out": 2.55057, "pred_drag_near": 0.04329, "pred_drag_mid": 0.09741, "pred_drag_out": 0.615, "pred_hold_near": 0.67015, "pred_hold_mid": 0.99828, "pred_hold_out": 2.56196}, {"beta": 0.85, "tier": "sparse", "near_n": 3.0, "mid_n": 4.0, "out_n": 2.0, "f_near": 38.287, "f_mid": 22.045, "f_out": 7.275, "err_near": 0.01114, "err_mid": 0.01502, "err_out": 0.6811, "pred_drag_near": 0.01087, "pred_drag_mid": 0.01447, "pred_drag_out": 0.04646, "pred_hold_near": 0.32155, "pred_hold_mid": 0.38413, "pred_hold_out": 0.69369}, {"beta": 0.85, "tier": "medium", "near_n": 6.0, "mid_n": 10.0, "out_n": 8.0, "f_near": 16.388, "f_mid": 9.435, "f_out": 3.114, "err_near": 0.01831, "err_mid": 0.03442, "err_out": 1.30912, "pred_drag_near": 0.01827, "pred_drag_mid": 0.03301, "pred_drag_out": 0.17054, "pred_hold_near": 0.43591, "pred_hold_mid": 0.58691, "pred_hold_out": 1.32115}, {"beta": 0.85, "tier": "dense", "near_n": 10.0, "mid_n": 16.0, "out_n": 22.0, "f_near": 9.302, "f_mid": 5.356, "f_out": 1.767, "err_near": 0.03331, "err_mid": 0.07314, "err_out": 2.14264, "pred_drag_near": 0.03361, "pred_drag_mid": 0.0723, "pred_drag_out": 0.44189, "pred_hold_near": 0.59207, "pred_hold_mid": 0.86159, "pred_hold_out": 2.15353}];
+const EQUAL = [{"tier": "sparse", "near_n": 3.0, "mid_n": 4.0, "out_n": 2.0, "f_near": 19.91, "f_mid": 19.91, "f_out": 19.911, "err_near": 0.01527, "err_mid": 0.01537, "err_out": 0.38488}, {"tier": "medium", "near_n": 6.0, "mid_n": 10.0, "out_n": 8.0, "f_near": 7.466, "f_mid": 7.466, "f_out": 7.467, "err_near": 0.04302, "err_mid": 0.04332, "err_out": 0.66765}, {"tier": "dense", "near_n": 10.0, "mid_n": 16.0, "out_n": 22.0, "f_near": 3.734, "f_mid": 3.734, "f_out": 3.733, "err_near": 0.12781, "err_mid": 0.12446, "err_out": 1.12629}];
+
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function fmt(x, d=2) { return Number(x).toFixed(d); }
+
+/* ---------------- one chart, two oppositely-sloped curves ----------------
+   The two functions have different units (bytes/s and metres), so both are
+   divided by their value at the selected allocation point and plotted on one
+   logarithmic axis.  1.0 is that point for every curve; the crossing is by
+   construction and is stated, not read as an optimum.  Absolute values are
+   in the tooltip, the end labels and the tables.                        */
+const SEL_RATES = [[7.661, '贴身'], [4.411, '视野内远'], [1.456, '视野外']];
+const REF_F = 10;                       // shared normalisation frequency, Hz
+const ref = {};
+for (const k of ['bw_bytes_per_s', 'err_drag_m', 'err_hold_m']) {
+  let best = CURVES.reduce((a, r) => Math.abs(+r.f - REF_F) < Math.abs(+a.f - REF_F) ? r : a);
+  ref[k] = +best[k];
+}
+
+function drawCurves() {
+  const host = document.getElementById('curves');
+  const W = 900, H = 430, m = { l: 70, r: 150, t: 24, b: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': '带宽消耗与位置误差随更新频率变化的两条反向曲线' }, host);
+  const fmin = 0, fmax = 40;
+  const xs = (f) => m.l + (f - fmin) / (fmax - fmin) * iw;
+  const ymin = 0.03, ymax = 200;                       // multiples
+  const ys = (v) => m.t + (1 - Math.log10(v / ymin) / Math.log10(ymax / ymin)) * ih;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  /* y grid at decades and half-decades */
+  for (const v of [0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 200]) {
+    const y = ys(v), major = [0.1, 1, 10, 100].includes(v);
+    el('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, class: 'gridline',
+      opacity: major ? 1 : 0.55 }, svg);
+    if (major) {
+      el('text', { x: m.l - 8, y: y + 4, class: 'tick', 'text-anchor': 'end' }, svg)
+        .textContent = v >= 1 ? v + '×' : v + '×';
+    }
+  }
+  /* normalisation reference */
+  el('line', { x1: m.l, x2: m.l + iw, y1: ys(1), y2: ys(1), class: 'axisline',
+    'stroke-dasharray': '2 4' }, svg);
+  el('text', { x: m.l + 6, y: ys(1) - 7, class: 'lbl' }, svg)
+    .textContent = '各函数在 10 Hz 处的取值 = 1×';
+
+  for (let f = 0; f <= 40; f += 5) {
+    el('text', { x: xs(f), y: H - m.b + 18, class: 'tick', 'text-anchor': 'middle' }, svg)
+      .textContent = f;
+  }
+  el('line', { x1: m.l, x2: m.l + iw, y1: H - m.b, y2: H - m.b, class: 'axisline' }, svg);
+  el('text', { x: m.l + iw / 2, y: H - 8, class: 'lbl', 'text-anchor': 'middle' }, svg)
+    .textContent = '每秒更新次数 f (Hz)';
+  el('text', { x: 16, y: m.t + ih / 2, class: 'lbl', 'text-anchor': 'middle',
+    transform: `rotate(-90 16 ${m.t + ih / 2})` }, svg)
+    .textContent = '相对 10 Hz 的倍率（对数）';
+
+  const series = [
+    { key: 'bw_bytes_per_s', name: '带宽消耗', color: css('--series-1'),
+      unit: (v) => fmt(v / 1024, 2) + ' KB/s' },
+    { key: 'err_drag_m', name: '视野内位置误差', color: css('--series-2'),
+      unit: (v) => fmt(v * 100, 1) + ' cm' },
+    { key: 'err_hold_m', name: '视野外位置误差', color: css('--series-3'), dash: '5 4',
+      unit: (v) => fmt(v, 2) + ' m' },
+  ];
+  const endLabels = [];
+  for (const sr of series) {
+    let d = '';
+    for (const r of CURVES) {
+      const v = +r[sr.key] / ref[sr.key];
+      d += (d ? ' L' : 'M') + xs(+r.f).toFixed(1) + ' ' +
+        clamp(ys(v), m.t, m.t + ih).toFixed(1);
+    }
+    el('path', { d, fill: 'none', stroke: sr.color, 'stroke-width': 2,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+      ...(sr.dash ? { 'stroke-dasharray': sr.dash } : {}) }, svg);
+    const last = CURVES[CURVES.length - 1];
+    const lv = +last[sr.key];
+    endLabels.push({ y: ys(lv / ref[sr.key]), sr, v: lv });
+  }
+  /* end labels, nudged apart so converging lines do not stack on each other */
+  endLabels.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < endLabels.length; i++) {
+    const min = endLabels[i - 1].y + 32;
+    if (endLabels[i].y < min) endLabels[i].y = min;
+  }
+  for (const { y: ly, sr, v } of endLabels) {
+    el('text', { x: xs(fmax) + 10, y: ly + 4, class: 'lbl-strong' }, svg)
+      .textContent = sr.name;
+    el('text', { x: xs(fmax) + 10, y: ly + 19, class: 'lbl' }, svg)
+      .textContent = sr.unit(v) + ' @40 Hz';
+  }
+
+  /* the selected allocation: one rate per class, each marked on its own curve */
+  el('text', { x: m.l + 6, y: m.t + 60, class: 'lbl' }, svg)
+    .textContent = '虚线 = β=0.70 密集档给三类位置的分配';
+  for (const [f, name] of SEL_RATES) {
+    el('line', { x1: xs(f), x2: xs(f), y1: m.t, y2: m.t + ih, class: 'axisline',
+      'stroke-dasharray': '3 4', opacity: 0.55 }, svg);
+    el('text', { x: xs(f), y: m.t + 14, class: 'lbl-strong', 'text-anchor': 'middle' }, svg)
+      .textContent = name;
+    el('text', { x: xs(f), y: m.t + 28, class: 'lbl', 'text-anchor': 'middle' }, svg)
+      .textContent = fmt(f, 1) + ' Hz';
+  }
+  const markAt = (f, key, color) => {
+    let best = CURVES.reduce((a, r) => Math.abs(+r.f - f) < Math.abs(+a.f - f) ? r : a);
+    el('circle', { cx: xs(+best.f), cy: ys(+best[key] / ref[key]), r: 4, fill: color,
+      stroke: css('--surface-1'), 'stroke-width': 2 }, svg);
+  };
+  markAt(1.456, 'bw_bytes_per_s', css('--series-1'));
+  markAt(7.661, 'err_drag_m', css('--series-2'));
+  markAt(1.456, 'err_hold_m', css('--series-3'));
+
+  /* hover */
+  const tt = document.getElementById('tt');
+  const cross = el('line', { y1: m.t, y2: m.t + ih, class: 'axisline', opacity: 0 }, svg);
+  const dots = series.map((sr) => el('circle', { r: 4, fill: sr.color,
+    stroke: css('--surface-1'), 'stroke-width': 2, opacity: 0 }, svg));
+  const hit = el('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent',
+    tabindex: 0, role: 'application', 'aria-label': '曲线读数' }, svg);
+  function show(clientX) {
+    const box = svg.getBoundingClientRect();
+    const px = (clientX - box.left) / box.width * W;
+    let f = (px - m.l) / iw * (fmax - fmin) + fmin;
+    f = Math.max(+CURVES[0].f, Math.min(+CURVES[CURVES.length - 1].f, f));
+    let best = CURVES[0], bd = 1e9;
+    for (const r of CURVES) { const d = Math.abs(+r.f - f); if (d < bd) { bd = d; best = r; } }
+    const x = xs(+best.f);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('opacity', 1);
+    series.forEach((sr, i) => {
+      dots[i].setAttribute('cx', x);
+      dots[i].setAttribute('cy', clamp(ys(+best[sr.key] / ref[sr.key]), m.t, m.t + ih));
+      dots[i].setAttribute('opacity', 1);
+    });
+    tt.innerHTML = '';
+    const h = document.createElement('div'); h.className = 'tt-x';
+    h.textContent = 'f = ' + fmt(+best.f, 1) + ' Hz'; tt.appendChild(h);
+    for (const sr of series) {
+      const row = document.createElement('div'); row.className = 'row';
+      const l = document.createElement('span');
+      const key = document.createElement('span'); key.className = 'key'; key.style.borderColor = sr.color;
+      l.appendChild(key); l.appendChild(document.createTextNode(sr.name));
+      const b = document.createElement('b');
+      b.textContent = sr.unit(+best[sr.key]);
+      row.appendChild(l); row.appendChild(b); tt.appendChild(row);
+    }
+    tt.style.opacity = 1;
+    const left = box.left + x / W * box.width;
+    tt.style.left = Math.min(left + 14, window.innerWidth - 240) + 'px';
+    tt.style.top = (box.top + m.t + 4) + 'px';
+  }
+  function hide() {
+    cross.setAttribute('opacity', 0);
+    dots.forEach((d) => d.setAttribute('opacity', 0));
+    tt.style.opacity = 0;
+  }
+  hit.addEventListener('pointermove', (ev) => show(ev.clientX));
+  hit.addEventListener('pointerleave', hide);
+  hit.addEventListener('focus', () => {
+    const r = svg.getBoundingClientRect();
+    show(r.left + (m.l + iw * 0.5) / W * r.width);
+  });
+  hit.addEventListener('blur', hide);
+}
+
+/* ---------------- tables ---------------- */
+function drawCurveTable() {
+  const tb = document.querySelector('#curve-table tbody');
+  if (!tb) return;
+  for (const r of CURVES) {
+    if (!([0.5, 1, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 40].includes(+r.f))) continue;
+    const tr = document.createElement('tr');
+    for (const v of [fmt(+r.f, 1), fmt(+r.bw_bytes_per_s / 1024, 2), fmt(+r.err_drag_m, 3), fmt(+r.err_hold_m, 3)]) {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+}
+function drawTables() {
+  const tb = document.querySelector('#exp-table tbody');
+  for (const r of EXP) {
+    const tr = document.createElement('tr');
+    if (Math.abs(r.beta - 0.70) < 1e-9) tr.className = r.tier === 'dense' ? 'sel' : 'cand';
+    const cells = [
+      fmt(r.beta, 2), r.tier === 'sparse' ? '稀疏' : r.tier === 'medium' ? '中' : '密集',
+      `${r.near_n}/${r.mid_n}/${r.out_n}`,
+      fmt(r.f_near, 1), fmt(r.f_mid, 1), fmt(r.f_out, 1),
+      fmt(r.err_near, 3), fmt(r.err_mid, 3), fmt(r.err_out, 3),
+    ];
+    for (const c of cells) {
+      const td = document.createElement('td');
+      if (c === '稀疏' || c === '中' || c === '密集') {
+        td.textContent = c;
+        td.style.textAlign = 'left';
+      } else td.textContent = c;
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+
+  const sel = EXP.find(r => Math.abs(r.beta - 0.70) < 1e-9 && r.tier === 'dense');
+  const pb = document.querySelector('#pred-table tbody');
+  const rows = [
+    ['贴身 (4 m)', sel.err_near, sel.pred_drag_near, sel.pred_hold_near],
+    ['视野内远 (18 m)', sel.err_mid, sel.pred_drag_mid, sel.pred_hold_mid],
+    ['视野外 (32 m)', sel.err_out, sel.pred_drag_out, sel.pred_hold_out],
+  ];
+  for (const [name, act, pd, ph] of rows) {
+    const ratioD = act / pd, ratioH = act / ph;
+    const tr = document.createElement('tr');
+    const muted = name.startsWith('视野外');
+    const cells = [
+      [name, ''],
+      [fmt(act, 3), ''],
+      [fmt(pd, 3), muted ? 'bad' : ''],
+      [fmt(ph, 3), muted ? 'ok' : ''],
+      [fmt(ratioD, 2) + '×', muted ? 'bad' : ''],
+    ];
+    for (const [txt, cls] of cells) {
+      const td = document.createElement('td'); td.textContent = txt;
+      if (cls) td.className = cls;
+      tr.appendChild(td);
+    }
+    pb.appendChild(tr);
+  }
+
+  const eb = document.querySelector('#equal-table tbody');
+  const map = { sparse: '稀疏', medium: '中', dense: '密集' };
+  for (const r of EQUAL) {
+    const nw = EXP.find(x => Math.abs(x.beta - 0.70) < 1e-9 && x.tier === r.tier);
+    for (const [label, f0, f1, f2, e0, e1, e2] of [
+      ['均分（旧）', r.f_near, r.f_mid, r.f_out, r.err_near, r.err_mid, r.err_out],
+      ['按视野权重（新）', nw.f_near, nw.f_mid, nw.f_out, nw.err_near, nw.err_mid, nw.err_out],
+    ]) {
+      const tr = document.createElement('tr');
+      const vals = [map[r.tier], label,
+        `${fmt(f0, 1)} Hz / ${fmt(e0, 3)} m`,
+        `${fmt(f1, 1)} Hz / ${fmt(e1, 3)} m`,
+        `${fmt(f2, 1)} Hz / ${fmt(e2, 3)} m`];
+      vals.forEach((v, i) => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        if (i <= 1) td.style.textAlign = 'left';
+        if (i === 1) {
+          const sw = document.createElement('span');
+          sw.className = 'swatch';
+          sw.style.background = label.startsWith('均分') ? css('--text-muted') : css('--series-1');
+          td.prepend(sw);
+        }
+        tr.appendChild(td);
+      });
+      eb.appendChild(tr);
+    }
+  }
+}
+
+drawCurves();
+drawTables();
+drawCurveTable();
+</script>
+</body>
+</html>
